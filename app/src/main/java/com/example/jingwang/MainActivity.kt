@@ -2,12 +2,16 @@ package com.example.jingwang
 
 import android.Manifest
 import android.app.Activity
+import android.content.ClipData
+import android.content.ClipDescription
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.net.VpnService
 import android.os.Build
+import android.os.PersistableBundle
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -28,6 +32,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -58,6 +63,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -178,6 +184,7 @@ private fun JingwangApp(
     val ruleState by container.ruleRepository.state.collectAsStateWithLifecycle()
     val vpnState by container.vpnStateRepository.state.collectAsStateWithLifecycle()
     val logs by container.queryLogRepository.logs.collectAsStateWithLifecycle()
+    val crashReport by container.crashReportRepository.report.collectAsStateWithLifecycle()
     val screen = Screen.entries[selected]
 
     MaterialTheme(
@@ -223,6 +230,7 @@ private fun JingwangApp(
                     container = container,
                     whitelist = settings.whitelist,
                     ruleState = ruleState,
+                    crashReport = crashReport,
                     darkMode = settings.darkMode,
                     onDarkModeChanged = { enabled ->
                         container.applicationScope.launch {
@@ -727,12 +735,16 @@ private fun SettingsScreen(
     container: AppContainer,
     whitelist: Set<String>,
     ruleState: RuleState,
+    crashReport: String?,
     darkMode: Boolean,
     onDarkModeChanged: (Boolean) -> Unit,
 ) {
     var domain by rememberSaveable { mutableStateOf("") }
     var updateMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var updating by rememberSaveable { mutableStateOf(false) }
+    var showCrashReport by rememberSaveable { mutableStateOf(false) }
+    var crashReportMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     LazyColumn(
         modifier.fillMaxSize().padding(horizontal = 20.dp),
@@ -875,7 +887,7 @@ private fun SettingsScreen(
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Text(
-                        "净网不读取网页正文，不上传 DNS 日志，不含账号、广告、统计、崩溃上报、远程配置或动态代码。系统 DNS 仍可看到正常查询；手动更新时 anti-AD 服务器可看到连接 IP 与时间。",
+                        "净网不读取网页正文，不上传 DNS 日志，不含账号、广告、统计、联网崩溃上报、远程配置或动态代码。系统 DNS 仍可看到正常查询；手动更新时 anti-AD 服务器可看到连接 IP 与时间。",
                         style = MaterialTheme.typography.bodyMedium,
                     )
                     OutlinedButton(
@@ -885,8 +897,100 @@ private fun SettingsScreen(
                 }
             }
         }
+        item { SectionTitle("崩溃诊断") }
+        item {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text(
+                        "最近一次闪退",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        if (crashReport == null) {
+                            "没有保存的崩溃报告。"
+                        } else {
+                            "报告包含完整异常消息和堆栈，可能带有当时的运行数据；仅保存在应用私有且禁止备份的目录中，新报告会覆盖旧报告。"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    crashReport?.let { report ->
+                        Button(
+                            onClick = { showCrashReport = true },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("查看崩溃报告") }
+                        OutlinedButton(
+                            onClick = {
+                                copyCrashReport(context, report)
+                                crashReportMessage = "已复制到系统剪贴板；请只在准备发送分析时复制，并在发送后清除剪贴板。"
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("复制崩溃报告") }
+                        TextButton(
+                            onClick = {
+                                container.crashReportRepository.clear()
+                                showCrashReport = false
+                                crashReportMessage = "崩溃报告已删除。"
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) { Text("删除崩溃报告") }
+                    }
+                    crashReportMessage?.let { message ->
+                        Text(message, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
         item { Spacer(Modifier.height(12.dp)) }
     }
+
+    if (showCrashReport) {
+        crashReport?.let { report ->
+            AlertDialog(
+                onDismissRequest = { showCrashReport = false },
+                title = { Text("最近一次崩溃报告") },
+                text = {
+                    SelectionContainer {
+                        LazyColumn(Modifier.heightIn(max = 520.dp)) {
+                            item {
+                                Text(
+                                    report,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontFamily = FontFamily.Monospace,
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        copyCrashReport(context, report)
+                        crashReportMessage = "已复制到系统剪贴板；发送后请清除剪贴板。"
+                    }) { Text("复制") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showCrashReport = false }) { Text("关闭") }
+                },
+            )
+        }
+    }
+}
+
+private fun copyCrashReport(context: Context, report: String) {
+    val clipboard = context.getSystemService(ClipboardManager::class.java)
+    val clip = ClipData.newPlainText("净网崩溃报告", report)
+    clip.description.extras = PersistableBundle().apply {
+        if (Build.VERSION.SDK_INT >= 33) {
+            putBoolean(ClipDescription.EXTRA_IS_SENSITIVE, true)
+        } else {
+            putBoolean("android.content.extra.IS_SENSITIVE", true)
+        }
+    }
+    clipboard.setPrimaryClip(clip)
 }
 
 private fun loadInstalledApps(context: Context): List<InstalledApp> {

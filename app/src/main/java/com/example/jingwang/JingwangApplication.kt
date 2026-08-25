@@ -1,6 +1,8 @@
 package com.example.jingwang
 
 import android.app.Application
+import com.example.jingwang.crash.CrashReportRepository
+import com.example.jingwang.crash.LocalCrashHandler
 import com.example.jingwang.data.PrivacyRepository
 import com.example.jingwang.data.QueryLogRepository
 import com.example.jingwang.data.RuleRepository
@@ -18,12 +20,14 @@ class JingwangApplication : Application() {
     override fun onCreate() {
         super.onCreate()
         container = AppContainer(this)
+        LocalCrashHandler.install(container.crashReportRepository)
         container.applicationScope.launch { container.ruleRepository.ensureLoaded() }
     }
 }
 
 class AppContainer(application: Application) {
     val applicationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    val crashReportRepository = CrashReportRepository(application)
     val privacyRepository = PrivacyRepository(SecureSettingsStore(application))
     val queryLogRepository = QueryLogRepository()
     val vpnStateRepository = VpnStateRepository()

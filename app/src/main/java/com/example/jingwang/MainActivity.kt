@@ -625,7 +625,7 @@ private fun LogDetailDialog(entry: QueryLogEntry, onDismiss: () -> Unit) {
                     Text(
                         "平台与用途来自 APK 内置离线映射或域名关键词；来源 APP 来自 Android 本机连接归属。结果可能不完整，净网不会为识别这些信息联网、写入磁盘或上传数据。",
                         style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        color = Color(0xff6e6e73),
                     )
                 }
             }
@@ -633,6 +633,9 @@ private fun LogDetailDialog(entry: QueryLogEntry, onDismiss: () -> Unit) {
         confirmButton = {
             TextButton(onClick = onDismiss) { Text("关闭") }
         },
+        containerColor = Color.White,
+        titleContentColor = Color(0xff1c1c1e),
+        textContentColor = Color(0xff1c1c1e),
     )
 }
 
@@ -642,7 +645,7 @@ private fun DetailRow(label: String, value: String) {
         Text(
             label,
             style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            color = Color(0xff6e6e73),
         )
         Text(value, style = MaterialTheme.typography.bodyMedium)
     }

@@ -28,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.jingwang.core.log.DomainInsightResolver
 import com.example.jingwang.core.model.QueryLogEntry
 import com.example.jingwang.core.model.VpnStatus
 import com.example.jingwang.data.RuleState
@@ -437,18 +439,29 @@ private fun LogsScreen(
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableIntStateOf(0) }
+    var selectedEntry by remember { mutableStateOf<QueryLogEntry?>(null) }
     val filtered = remember(logs, search, filter) {
+        val term = search.trim()
         logs.filter { entry ->
-            (search.isBlank() || entry.domain.contains(search.trim(), ignoreCase = true)) &&
+            val matchesSearch = if (term.isEmpty()) {
+                true
+            } else {
+                val insight = DomainInsightResolver.resolve(entry.domain, entry.blocked)
+                entry.domain.contains(term, ignoreCase = true) ||
+                    insight.displayName.contains(term, ignoreCase = true) ||
+                    insight.provider.contains(term, ignoreCase = true) ||
+                    insight.category.contains(term, ignoreCase = true)
+            }
+            matchesSearch &&
                 (filter == 0 || (filter == 1 && entry.blocked) || (filter == 2 && !entry.blocked))
         }
     }
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        ScreenHeader("日志", "仅保存在内存中的最近查询")
+        ScreenHeader("日志", "离线解释最近的 DNS 查询")
         OutlinedTextField(
             value = search,
             onValueChange = { search = it.take(253) },
-            label = { Text("搜索域名") },
+            label = { Text("搜索平台、用途或域名") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -459,7 +472,7 @@ private fun LogsScreen(
             onSelected = { filter = it },
         )
         Text(
-            "最多 500 条；停止 VPN 或进程退出后清空",
+            "最多 500 条，仅在内存中保存；点击条目查看详细说明",
             modifier = Modifier.padding(vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -478,13 +491,38 @@ private fun LogsScreen(
                         )
                     }
                 }
-                items(filtered, key = { "${it.timestampEpochMillis}-${it.domain}" }) { entry ->
+                items(filtered, key = { it.id }) { entry ->
+                    val insight = remember(entry.domain, entry.blocked) {
+                        DomainInsightResolver.resolve(entry.domain, entry.blocked)
+                    }
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 11.dp),
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedEntry = entry }
+                            .padding(horizontal = 16.dp, vertical = 11.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(entry.domain, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Text(
+                                insight.displayName,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                "${insight.provider} · ${insight.category}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                entry.domain,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                             Text(
                                 "${if (entry.blocked) "已拦截" else "已放行"} · ${formatTime(entry.timestampEpochMillis)}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -504,6 +542,78 @@ private fun LogsScreen(
             }
         }
         Spacer(Modifier.height(12.dp))
+    }
+
+    selectedEntry?.let { entry ->
+        LogDetailDialog(entry = entry, onDismiss = { selectedEntry = null })
+    }
+}
+
+@Composable
+private fun LogDetailDialog(entry: QueryLogEntry, onDismiss: () -> Unit) {
+    val insight = remember(entry.domain, entry.blocked) {
+        DomainInsightResolver.resolve(entry.domain, entry.blocked)
+    }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(insight.displayName) },
+        text = {
+            LazyColumn(
+                modifier = Modifier.heightIn(max = 520.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                item { DetailRow("服务平台", insight.provider) }
+                item { DetailRow("用途分类", insight.category) }
+                item { DetailRow("可能用途", insight.purpose) }
+                item {
+                    DetailRow(
+                        "来源应用",
+                        "未知。DNS 数据包不携带可靠的应用身份，净网不会用猜测结果误导您。",
+                    )
+                }
+                item { DetailRow("原始域名", entry.domain) }
+                item {
+                    DetailRow(
+                        "处理结果",
+                        if (entry.blocked) {
+                            "已拦截：返回 NXDOMAIN，未向上游系统 DNS 转发。"
+                        } else {
+                            "已放行：查询已转发到当前网络提供的系统 DNS。"
+                        },
+                    )
+                }
+                item { DetailRow("发生时间", formatTime(entry.timestampEpochMillis)) }
+                item { DetailRow("识别依据", insight.recognitionBasis) }
+                item {
+                    DetailRow(
+                        "数据保存",
+                        "该日志仅保存在内存中，停止 VPN、进程退出或设备重启后清空。",
+                    )
+                }
+                item {
+                    Text(
+                        "通俗名称来自 APK 内置的离线映射和域名关键词，只用于帮助理解，可能不完整；净网不会为识别这些信息访问服务器或上传域名。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("关闭") }
+        },
+    )
+}
+
+@Composable
+private fun DetailRow(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium)
     }
 }
 

@@ -25,6 +25,7 @@ data class PersistedSettings(
 )
 
 data class QueryLogEntry(
+    val id: Long,
     val timestampEpochMillis: Long,
     val domain: String,
     val blocked: Boolean,

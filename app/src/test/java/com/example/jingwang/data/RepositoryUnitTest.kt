@@ -38,4 +38,13 @@ class RepositoryUnitTest {
         repository.clear()
         assertTrue(repository.logs.value.isEmpty())
     }
+
+    @Test
+    fun repeatedIdenticalLogsHaveUniqueIds() {
+        val repository = QueryLogRepository()
+        repeat(100) { repository.add("ads.example", true) }
+
+        val ids = repository.logs.value.map { it.id }
+        assertEquals(ids.size, ids.toSet().size)
+    }
 }

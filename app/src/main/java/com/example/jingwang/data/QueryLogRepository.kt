@@ -9,11 +9,12 @@ class QueryLogRepository {
     private val lock = Any()
     private val entries = ArrayDeque<QueryLogEntry>(MAX_ENTRIES)
     private val mutableLogs = MutableStateFlow<List<QueryLogEntry>>(emptyList())
+    private var nextId = 0L
     val logs: StateFlow<List<QueryLogEntry>> = mutableLogs.asStateFlow()
 
     fun add(domain: String, blocked: Boolean) = synchronized(lock) {
         if (entries.size == MAX_ENTRIES) entries.removeFirst()
-        entries.addLast(QueryLogEntry(System.currentTimeMillis(), domain, blocked))
+        entries.addLast(QueryLogEntry(nextId++, System.currentTimeMillis(), domain, blocked))
         mutableLogs.value = entries.toList().asReversed()
     }
 

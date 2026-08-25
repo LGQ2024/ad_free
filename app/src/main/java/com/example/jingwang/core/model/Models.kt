@@ -24,11 +24,18 @@ data class PersistedSettings(
     val darkMode: Boolean = false,
 )
 
+data class QuerySourceApp(
+    val label: String,
+    val packageNames: List<String>,
+    val sharedUid: Boolean,
+)
+
 data class QueryLogEntry(
     val id: Long,
     val timestampEpochMillis: Long,
     val domain: String,
     val blocked: Boolean,
+    val sourceApp: QuerySourceApp?,
 )
 
 enum class VpnStatus {

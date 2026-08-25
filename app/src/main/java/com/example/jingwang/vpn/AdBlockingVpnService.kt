@@ -39,6 +39,7 @@ class AdBlockingVpnService : VpnService() {
     private val outputLock = Any()
     private val packetSlots = Semaphore(MAX_CONCURRENT_QUERIES)
     private lateinit var systemDnsNetwork: SystemDnsNetwork
+    private lateinit var appConnectionResolver: AppConnectionResolver
     private lateinit var forwarder: SystemDnsForwarder
     private var tunnel: ParcelFileDescriptor? = null
     private var tunnelJob: Job? = null
@@ -49,7 +50,9 @@ class AdBlockingVpnService : VpnService() {
     override fun onCreate() {
         super.onCreate()
         createNotificationChannel()
-        systemDnsNetwork = SystemDnsNetwork(getSystemService(ConnectivityManager::class.java))
+        val connectivityManager = getSystemService(ConnectivityManager::class.java)
+        systemDnsNetwork = SystemDnsNetwork(connectivityManager)
+        appConnectionResolver = AppConnectionResolver(this, connectivityManager)
         forwarder = SystemDnsForwarder(this) { systemDnsNetwork.current.value }
         serviceScope.launch {
             combine(container.privacyRepository.settings, container.ruleRepository.state) { settings, _ ->
@@ -200,6 +203,7 @@ class AdBlockingVpnService : VpnService() {
             return null
         }
         val domain = query.question.name
+        val sourceApp = appConnectionResolver.resolve(request)
         val blocked = matcher.shouldBlock(domain)
         val dnsResponse = if (blocked) {
             DnsMessage.nxdomain(query)
@@ -211,7 +215,7 @@ class AdBlockingVpnService : VpnService() {
             }
         }
         if (dnsResponse.size > MAX_DNS_RESPONSE) return null
-        container.queryLogRepository.add(domain, blocked)
+        container.queryLogRepository.add(domain, blocked, sourceApp)
         container.privacyRepository.recordQuery(blocked)
         return try {
             IpPacketCodec.buildUdpResponse(request, dnsResponse)

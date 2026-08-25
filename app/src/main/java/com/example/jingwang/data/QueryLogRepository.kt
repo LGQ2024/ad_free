@@ -1,6 +1,7 @@
 package com.example.jingwang.data
 
 import com.example.jingwang.core.model.QueryLogEntry
+import com.example.jingwang.core.model.QuerySourceApp
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -12,9 +13,9 @@ class QueryLogRepository {
     private var nextId = 0L
     val logs: StateFlow<List<QueryLogEntry>> = mutableLogs.asStateFlow()
 
-    fun add(domain: String, blocked: Boolean) = synchronized(lock) {
+    fun add(domain: String, blocked: Boolean, sourceApp: QuerySourceApp? = null) = synchronized(lock) {
         if (entries.size == MAX_ENTRIES) entries.removeFirst()
-        entries.addLast(QueryLogEntry(nextId++, System.currentTimeMillis(), domain, blocked))
+        entries.addLast(QueryLogEntry(nextId++, System.currentTimeMillis(), domain, blocked, sourceApp))
         mutableLogs.value = entries.toList().asReversed()
     }
 

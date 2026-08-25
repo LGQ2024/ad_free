@@ -1,6 +1,7 @@
 package com.example.jingwang.data
 
 import com.example.jingwang.core.model.PersistedSettings
+import com.example.jingwang.core.model.QuerySourceApp
 import com.example.jingwang.core.model.RuleMetadata
 import com.example.jingwang.core.model.TrafficStatistics
 import org.junit.Assert.assertEquals
@@ -46,5 +47,21 @@ class RepositoryUnitTest {
 
         val ids = repository.logs.value.map { it.id }
         assertEquals(ids.size, ids.toSet().size)
+
+    }
+    @Test
+    fun sourceAppExistsOnlyInMemoryLogAndIsRemovedOnClear() {
+        val repository = QueryLogRepository()
+        val source = QuerySourceApp(
+            label = "视频应用",
+            packageNames = listOf("com.example.video"),
+            sharedUid = false,
+        )
+
+        repository.add("api.example.test", blocked = false, sourceApp = source)
+
+        assertEquals(source, repository.logs.value.single().sourceApp)
+        repository.clear()
+        assertTrue(repository.logs.value.isEmpty())
     }
 }

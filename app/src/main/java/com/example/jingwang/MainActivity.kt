@@ -458,7 +458,9 @@ private fun LogsScreen(
                 entry.domain.contains(term, ignoreCase = true) ||
                     insight.displayName.contains(term, ignoreCase = true) ||
                     insight.provider.contains(term, ignoreCase = true) ||
-                    insight.category.contains(term, ignoreCase = true)
+                    insight.category.contains(term, ignoreCase = true) ||
+                    entry.sourceApp?.label?.contains(term, ignoreCase = true) == true ||
+                    entry.sourceApp?.packageNames?.any { it.contains(term, ignoreCase = true) } == true
             }
             matchesSearch &&
                 (filter == 0 || (filter == 1 && entry.blocked) || (filter == 2 && !entry.blocked))
@@ -469,7 +471,7 @@ private fun LogsScreen(
         OutlinedTextField(
             value = search,
             onValueChange = { search = it.take(253) },
-            label = { Text("搜索平台、用途或域名") },
+            label = { Text("搜索 APP、平台、用途或域名") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -480,7 +482,7 @@ private fun LogsScreen(
             onSelected = { filter = it },
         )
         Text(
-            "最多 500 条，仅在内存中保存；点击条目查看详细说明",
+            "最多 500 条，仅在内存中保存；来源 APP 为系统连接归属的尽力识别",
             modifier = Modifier.padding(vertical = 10.dp),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -517,6 +519,15 @@ private fun LogsScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.SemiBold,
                             )
+                            entry.sourceApp?.let { source ->
+                                Text(
+                                    "来源：${source.label}${if (source.sharedUid) "（共享 UID）" else ""}",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
                             Text(
                                 "${insight.provider} · ${insight.category}",
                                 style = MaterialTheme.typography.bodySmall,
@@ -573,11 +584,23 @@ private fun LogDetailDialog(entry: QueryLogEntry, onDismiss: () -> Unit) {
                 item { DetailRow("服务平台", insight.provider) }
                 item { DetailRow("用途分类", insight.category) }
                 item { DetailRow("可能用途", insight.purpose) }
+                item { DetailRow("识别可信度", "${insight.confidence.label}：${insight.confidence.explanation}") }
                 item {
                     DetailRow(
                         "来源应用",
-                        "未知。DNS 数据包不携带可靠的应用身份，净网不会用猜测结果误导您。",
+                        entry.sourceApp?.let { source ->
+                            if (source.sharedUid) {
+                                "${source.label}。这些应用共享同一 UID，无法可靠区分具体是哪一个。"
+                            } else {
+                                "${source.label}。由 Android 系统连接归属 API 识别。"
+                            }
+                        } ?: if (Build.VERSION.SDK_INT < 29) {
+                            "当前为 Android 8/9，系统尚未提供 VPN 连接所属 UID 查询 API。"
+                        } else "Android 未返回该连接的所属 UID，净网不会用猜测结果代替。",
                     )
+                }
+                entry.sourceApp?.let { source ->
+                    item { DetailRow("应用包名", source.packageNames.joinToString("\n")) }
                 }
                 item { DetailRow("原始域名", entry.domain) }
                 item {
@@ -600,7 +623,7 @@ private fun LogDetailDialog(entry: QueryLogEntry, onDismiss: () -> Unit) {
                 }
                 item {
                     Text(
-                        "通俗名称来自 APK 内置的离线映射和域名关键词，只用于帮助理解，可能不完整；净网不会为识别这些信息访问服务器或上传域名。",
+                        "平台与用途来自 APK 内置离线映射或域名关键词；来源 APP 来自 Android 本机连接归属。结果可能不完整，净网不会为识别这些信息联网、写入磁盘或上传数据。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

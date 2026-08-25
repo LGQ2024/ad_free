@@ -1,11 +1,18 @@
 package com.example.jingwang.core.log
 
+enum class InsightConfidence(val label: String, val explanation: String) {
+    HIGH("高", "平台域名与 APK 内置离线映射精确匹配"),
+    MEDIUM("中", "根据域名中的明确功能关键词推断"),
+    LOW("低", "只能确认规则结果和基础域名，具体用途未知"),
+}
+
 data class DomainInsight(
     val displayName: String,
     val provider: String,
     val category: String,
     val purpose: String,
     val recognitionBasis: String,
+    val confidence: InsightConfidence = InsightConfidence.HIGH,
 )
 
 object DomainInsightResolver {
@@ -205,51 +212,62 @@ object DomainInsightResolver {
                 )
             }
         }
+        OfflineDomainCatalog.resolve(normalized)?.let { return it }
+        val base = OfflineDomainCatalog.baseDomain(normalized)
+
 
         if (blocked) {
             val tokens = normalized.split(Regex("[._-]+"))
             tokens.firstOrNull { it in advertisingTokens }?.let { keyword ->
                 return DomainInsight(
-                    displayName = "广告服务",
-                    provider = "未知广告平台",
+                    displayName = "$base · 广告服务",
+                    provider = base,
                     category = "广告投放",
                     purpose = "域名名称显示它可能用于广告请求、素材或展示；无法仅凭域名确认具体平台。",
                     recognitionBasis = "拦截规则命中；域名关键词：$keyword",
+                    confidence = InsightConfidence.MEDIUM,
                 )
             }
             tokens.firstOrNull { it in trackingTokens }?.let { keyword ->
                 return DomainInsight(
-                    displayName = "统计或追踪服务",
-                    provider = "未知统计平台",
+                    displayName = "$base · 统计或追踪服务",
+                    provider = base,
                     category = "统计与追踪",
                     purpose = "域名名称显示它可能用于事件、设备、使用情况或营销效果统计。",
                     recognitionBasis = "拦截规则命中；域名关键词：$keyword",
+                    confidence = InsightConfidence.MEDIUM,
                 )
             }
             tokens.firstOrNull { it in attributionTokens }?.let { keyword ->
                 return DomainInsight(
-                    displayName = "安装或转化归因",
-                    provider = "未知归因平台",
+                    displayName = "$base · 安装或转化归因",
+                    provider = base,
                     category = "营销归因",
                     purpose = "域名名称显示它可能用于安装来源、广告点击或转化效果统计。",
                     recognitionBasis = "拦截规则命中；域名关键词：$keyword",
+                    confidence = InsightConfidence.MEDIUM,
                 )
             }
+            OfflineDomainCatalog.resolveFunction(normalized, blocked = true)?.let { return it }
             return DomainInsight(
-                displayName = "未知广告或追踪域名",
-                provider = "无法离线识别",
-                category = "规则列表命中",
-                purpose = "当前离线规则将该域名列为广告或追踪相关，但无法仅凭域名可靠判断具体业务。",
+                displayName = "$base · 已拦截域名",
+                provider = base,
+                category = "规则列表命中（用途未知）",
+                purpose = "anti-AD 将该域名列为广告或追踪相关；离线映射尚不能可靠判断它的具体业务。",
                 recognitionBasis = "anti-AD 规则命中；内置平台映射未识别",
+                confidence = InsightConfidence.LOW,
             )
         }
 
+        OfflineDomainCatalog.resolveFunction(normalized, blocked = false)?.let { return it }
+
         return DomainInsight(
-            displayName = "普通 DNS 查询",
-            provider = "无法离线识别",
-            category = "未命中拦截规则",
-            purpose = "该域名未被当前规则拦截；仅凭 DNS 域名无法确定它在应用中的具体用途。",
+            displayName = "$base · 网络连接",
+            provider = base,
+            category = "未命中拦截规则（用途未知）",
+            purpose = "应用正在查询该域名的网络地址；当前离线映射无法可靠判断更具体的业务。",
             recognitionBasis = "当前规则未命中；内置平台映射未识别",
+            confidence = InsightConfidence.LOW,
         )
     }
 

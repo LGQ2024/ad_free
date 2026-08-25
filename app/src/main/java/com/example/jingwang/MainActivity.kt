@@ -71,6 +71,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.jingwang.core.log.DomainInsightResolver
 import com.example.jingwang.core.model.QueryLogEntry
 import com.example.jingwang.core.model.VpnStatus
+import com.example.jingwang.core.rules.RuleMatcher
 import com.example.jingwang.data.RuleState
 import com.example.jingwang.vpn.AdBlockingVpnService
 import java.text.DateFormat
@@ -207,6 +208,7 @@ private fun JingwangApp(
                 Screen.LOGS -> LogsScreen(
                     modifier = Modifier.padding(padding),
                     logs = logs,
+                    whitelist = settings.whitelist,
                     onWhitelist = { domain ->
                         container.applicationScope.launch { container.privacyRepository.addWhitelist(domain) }
                     },
@@ -443,11 +445,13 @@ private fun IosSegmentedControl(
 private fun LogsScreen(
     modifier: Modifier,
     logs: List<QueryLogEntry>,
+    whitelist: Set<String>,
     onWhitelist: (String) -> Unit,
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selectedEntry by remember { mutableStateOf<QueryLogEntry?>(null) }
+    val whitelistMatcher = remember(whitelist) { RuleMatcher(emptySet(), whitelist) }
     val filtered = remember(logs, search, filter) {
         val term = search.trim()
         logs.filter { entry ->
@@ -505,6 +509,7 @@ private fun LogsScreen(
                     val insight = remember(entry.domain, entry.blocked) {
                         DomainInsightResolver.resolve(entry.domain, entry.blocked)
                     }
+                    val whitelisted = whitelistMatcher.isWhitelisted(entry.domain)
                     Row(
                         Modifier
                             .fillMaxWidth()
@@ -553,7 +558,10 @@ private fun LogsScreen(
                             )
                         }
                         if (entry.blocked) {
-                            TextButton(onClick = { onWhitelist(entry.domain) }) { Text("放行") }
+                            TextButton(
+                                onClick = { onWhitelist(entry.domain) },
+                                enabled = !whitelisted,
+                            ) { Text(if (whitelisted) "已放行" else "放行") }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))

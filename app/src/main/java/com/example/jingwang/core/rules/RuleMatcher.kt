@@ -13,6 +13,11 @@ class RuleMatcher(
         return matchesSuffix(normalized, blocked)
     }
 
+    fun isWhitelisted(domain: String): Boolean {
+        val normalized = DomainNames.normalize(domain) ?: return false
+        return matchesSuffix(normalized, allowed)
+    }
+
     private fun matchesSuffix(domain: String, candidates: Set<String>): Boolean {
         var offset = 0
         while (true) {

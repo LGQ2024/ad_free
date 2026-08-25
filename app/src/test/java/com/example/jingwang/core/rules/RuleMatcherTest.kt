@@ -17,6 +17,8 @@ class RuleMatcherTest {
 
         assertFalse(matcher.shouldBlock("ads.example.com"))
         assertFalse(matcher.shouldBlock("deep.ads.example.com"))
+        assertTrue(matcher.isWhitelisted("deep.ads.example.com"))
+        assertFalse(matcher.isWhitelisted("a.tracker.test"))
         assertTrue(matcher.shouldBlock("a.tracker.test"))
         assertFalse(matcher.shouldBlock("unrelated.test"))
     }

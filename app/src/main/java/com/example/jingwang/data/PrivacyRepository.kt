@@ -35,6 +35,8 @@ class PrivacyRepository(private val store: SecureSettingsStore) {
         }
     }
 
+    fun setDarkMode(enabled: Boolean) = mutateAndPersist { it.copy(darkMode = enabled) }
+
     fun setRuleMetadata(metadata: RuleMetadata) = mutateAndPersist { it.copy(ruleMetadata = metadata) }
 
     fun recordQuery(blocked: Boolean) {

@@ -119,6 +119,7 @@ class SecureSettingsStore(context: Context) {
                     output.writeLong(blockedTotal)
                     output.writeLong(allowedTotal)
                 }
+                output.writeBoolean(settings.darkMode)
             }
             bytes.toByteArray()
         }
@@ -141,8 +142,15 @@ class SecureSettingsStore(context: Context) {
                 blockedTotal = input.readLong().coerceAtLeast(0),
                 allowedTotal = input.readLong().coerceAtLeast(0),
             )
+            val darkMode = if (input.available() > 0) input.readBoolean() else false
             require(input.read() == -1) { "状态数据包含尾随内容" }
-            PersistedSettings(whitelist, bypass, metadata, statistics)
+            PersistedSettings(
+                whitelist = whitelist,
+                bypassPackages = bypass,
+                ruleMetadata = metadata,
+                statistics = statistics,
+                darkMode = darkMode,
+            )
         }
 
         private fun DataOutputStream.writeStringSet(values: Set<String>) {

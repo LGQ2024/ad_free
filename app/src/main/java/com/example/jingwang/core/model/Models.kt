@@ -21,6 +21,7 @@ data class PersistedSettings(
     val bypassPackages: Set<String> = emptySet(),
     val ruleMetadata: RuleMetadata = RuleMetadata(),
     val statistics: TrafficStatistics = TrafficStatistics(),
+    val darkMode: Boolean = false,
 )
 
 data class QueryLogEntry(

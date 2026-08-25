@@ -15,8 +15,17 @@ class RepositoryUnitTest {
             bypassPackages = setOf("com.example.app"),
             ruleMetadata = RuleMetadata("test", "1", 123, 10, "a".repeat(64)),
             statistics = TrafficStatistics(1, 2, 3, 4, 5),
+            darkMode = true,
         )
         assertEquals(settings, SecureSettingsStore.decode(SecureSettingsStore.encode(settings)))
+    }
+
+    @Test
+    fun codecReadsLegacyStateWithoutThemeFlagAsLightMode() {
+        val encoded = SecureSettingsStore.encode(PersistedSettings(darkMode = true))
+        val legacyBytes = encoded.copyOf(encoded.size - 1)
+
+        assertEquals(false, SecureSettingsStore.decode(legacyBytes).darkMode)
     }
 
     @Test

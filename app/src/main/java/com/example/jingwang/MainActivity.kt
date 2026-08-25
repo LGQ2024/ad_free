@@ -27,10 +27,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.AlertDialog
@@ -81,30 +84,30 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 private val IosLightColors = lightColorScheme(
-    primary = Color(0xff007aff),
+    primary = Color(0xff08785f),
     onPrimary = Color.White,
-    secondary = Color(0xff34c759),
-    background = Color(0xfff2f2f7),
+    secondary = Color(0xff24966d),
+    background = Color(0xfff5f7f6),
     onBackground = Color(0xff1c1c1e),
     surface = Color.White,
     onSurface = Color(0xff1c1c1e),
-    surfaceVariant = Color(0xffe5e5ea),
-    onSurfaceVariant = Color(0xff6e6e73),
-    outline = Color(0xffc6c6c8),
+    surfaceVariant = Color(0xffedf1ef),
+    onSurfaceVariant = Color(0xff5f6964),
+    outline = Color(0xffd6ddda),
     error = Color(0xffff3b30),
 )
 
 private val IosDarkColors = darkColorScheme(
-    primary = Color(0xff0a84ff),
-    onPrimary = Color.White,
-    secondary = Color(0xff30d158),
-    background = Color.Black,
+    primary = Color(0xff65d6b0),
+    onPrimary = Color(0xff06251d),
+    secondary = Color(0xff54c997),
+    background = Color(0xff0e1110),
     onBackground = Color.White,
-    surface = Color(0xff1c1c1e),
+    surface = Color(0xff181c1a),
     onSurface = Color.White,
-    surfaceVariant = Color(0xff2c2c2e),
-    onSurfaceVariant = Color(0xffaeaeb2),
-    outline = Color(0xff48484a),
+    surfaceVariant = Color(0xff242a27),
+    onSurfaceVariant = Color(0xffabb5b0),
+    outline = Color(0xff39413d),
     error = Color(0xffff453a),
 )
 
@@ -249,18 +252,31 @@ private fun JingwangApp(
 private fun IosTabBar(selected: Int, onSelected: (Int) -> Unit) {
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 10.dp,
+        shadowElevation = 6.dp,
     ) {
         Row(
-            Modifier.fillMaxWidth().navigationBarsPadding().heightIn(min = 56.dp),
+            Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 7.dp)
+                .heightIn(min = 46.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Screen.entries.forEachIndexed { index, item ->
                 Box(
                     modifier = Modifier
                         .weight(1f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(
+                            if (selected == index) {
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                            } else {
+                                Color.Transparent
+                            },
+                        )
                         .clickable { onSelected(index) }
-                        .padding(vertical = 17.dp),
+                        .padding(vertical = 10.dp),
                     contentAlignment = Alignment.Center,
                 ) {
                     Text(
@@ -270,7 +286,8 @@ private fun IosTabBar(selected: Int, onSelected: (Int) -> Unit) {
                         } else {
                             MaterialTheme.colorScheme.onSurfaceVariant
                         },
-                        fontWeight = if (selected == index) FontWeight.SemiBold else FontWeight.Normal,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = if (selected == index) FontWeight.Bold else FontWeight.Medium,
                     )
                 }
             }
@@ -287,56 +304,59 @@ private fun HomeScreen(
     onStartVpn: () -> Unit,
     onStopVpn: () -> Unit,
 ) {
-    val active = vpnState.status != VpnStatus.STOPPED && vpnState.status != VpnStatus.ERROR
+    val running = vpnState.status != VpnStatus.STOPPED && vpnState.status != VpnStatus.ERROR
+    val protected = vpnState.status == VpnStatus.ACTIVE
+    val statusTitle = when (vpnState.status) {
+        VpnStatus.ACTIVE -> "保护正在运行"
+        VpnStatus.STARTING -> "正在开启保护"
+        VpnStatus.WAITING_FOR_NETWORK -> "等待可用网络"
+        VpnStatus.ERROR -> "保护出现问题"
+        VpnStatus.STOPPED -> "保护尚未开启"
+    }
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 20.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        item { ScreenHeader("净网", "本地 DNS 广告拦截") }
-        item {
-            StatusCard(
-                title = vpnState.message,
-                subtitle = "只处理发往虚拟 DNS 的查询，普通网络流量不会进入净网",
-                active = vpnState.status == VpnStatus.ACTIVE,
-            )
-        }
+        item { ScreenHeader("净网", "隐私优先的本地 DNS 保护") }
         if (integrityWarning != null) item { WarningCard(integrityWarning) }
         item {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                MetricCard("今日拦截", statistics.blockedToday.toString(), Modifier.weight(1f))
-                MetricCard("今日放行", statistics.allowedToday.toString(), Modifier.weight(1f))
-            }
+            ProtectionCard(
+                title = statusTitle,
+                message = vpnState.message,
+                running = running,
+                protected = protected,
+                problem = vpnState.status == VpnStatus.ERROR,
+                onStartVpn = onStartVpn,
+                onStopVpn = onStopVpn,
+            )
         }
         item {
-            Button(
-                onClick = if (active) onStopVpn else onStartVpn,
-                modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
-            ) { Text(if (active) "停止保护并清空日志" else "开启保护") }
+            TrafficSummaryCard(
+                blocked = statistics.blockedToday,
+                allowed = statistics.allowedToday,
+            )
         }
         item {
-            Card(
-                Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Text(
-                    "正常查询仍由当前 Wi‑Fi 或运营商的系统 DNS 处理。净网不会上传查询日志。",
-                    modifier = Modifier.padding(16.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            TrustCard(
+                title = "隐私边界",
+                items = listOf(
+                    "仅处理 DNS" to "不读取网页正文，也不接管普通应用流量",
+                    "日志仅在内存" to "最多 500 条，停止保护后立即清空",
+                    "无遥测上传" to "不含统计、广告或联网崩溃上报",
+                ),
+            )
         }
-        item { Spacer(Modifier.height(8.dp)) }
+        item { Spacer(Modifier.height(10.dp)) }
     }
 }
 
 @Composable
 private fun ScreenHeader(title: String, subtitle: String? = null) {
     Column(
-        Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp),
+        Modifier.fillMaxWidth().padding(top = 20.dp, bottom = 6.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(title, style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
+        Text(title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
         if (subtitle != null) {
             Text(
                 subtitle,
@@ -351,47 +371,167 @@ private fun ScreenHeader(title: String, subtitle: String? = null) {
 private fun SectionTitle(title: String) {
     Text(
         title,
-        modifier = Modifier.padding(start = 4.dp, top = 4.dp),
+        modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 2.dp),
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
+        fontWeight = FontWeight.SemiBold,
     )
 }
 
 @Composable
-private fun StatusCard(title: String, subtitle: String, active: Boolean) {
+private fun ProtectionCard(
+    title: String,
+    message: String,
+    running: Boolean,
+    protected: Boolean,
+    problem: Boolean,
+    onStartVpn: () -> Unit,
+    onStopVpn: () -> Unit,
+) {
+    val statusColor = when {
+        problem -> MaterialTheme.colorScheme.error
+        protected -> MaterialTheme.colorScheme.secondary
+        running -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
     Card(
         Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(22.dp),
     ) {
-        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Surface(
-                color = if (active) {
-                    MaterialTheme.colorScheme.secondary.copy(alpha = 0.16f)
-                } else {
-                    MaterialTheme.colorScheme.surfaceVariant
-                },
-                shape = RoundedCornerShape(99.dp),
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text(
-                    if (active) "保护中" else "未保护",
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
-                    color = if (active) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                )
+                Box(
+                    Modifier
+                        .size(58.dp)
+                        .background(statusColor.copy(alpha = 0.13f), CircleShape),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(Modifier.size(18.dp).background(statusColor, CircleShape))
+                }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
+                    Text(
+                        message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Surface(
+                        color = statusColor.copy(alpha = 0.12f),
+                        contentColor = statusColor,
+                        shape = RoundedCornerShape(99.dp),
+                    ) {
+                        Text(
+                            when {
+                                problem -> "需要处理"
+                                protected -> "DNS 保护已生效"
+                                running -> "保护准备中"
+                                else -> "当前未保护"
+                            },
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                }
             }
-            Text(title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
-            Text(subtitle, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            if (running) {
+                OutlinedButton(
+                    onClick = onStopVpn,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text("停止保护") }
+            } else {
+                Button(
+                    onClick = onStartVpn,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                ) { Text(if (problem) "重新开启保护" else "开启保护") }
+            }
+            Text(
+                if (running) {
+                    "停止保护会同时清空内存中的 DNS 日志。"
+                } else {
+                    "首次开启时，Android 会显示系统 VPN 授权确认。"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
 
 @Composable
-private fun MetricCard(label: String, value: String, modifier: Modifier = Modifier) {
-    Card(modifier, colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
-            Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun TrafficSummaryCard(blocked: Long, allowed: Long) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp)) {
+            Text("今日 DNS", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(14.dp))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(18.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TrafficMetric("已拦截", blocked.toString(), MaterialTheme.colorScheme.error, Modifier.weight(1f))
+                Box(
+                    Modifier
+                        .width(1.dp)
+                        .height(44.dp)
+                        .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.65f)),
+                )
+                TrafficMetric("已放行", allowed.toString(), MaterialTheme.colorScheme.secondary, Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrafficMetric(label: String, value: String, color: Color, modifier: Modifier = Modifier) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(3.dp)) {
+        Text(value, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold)
+        Text(label, style = MaterialTheme.typography.bodySmall, color = color, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+@Composable
+private fun TrustCard(title: String, items: List<Pair<String, String>>) {
+    Card(
+        Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+    ) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+            items.forEach { item ->
+                TrustRow(item.first, item.second)
+            }
+        }
+    }
+}
+
+@Composable
+private fun TrustRow(title: String, detail: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Box(
+            Modifier
+                .padding(top = 6.dp)
+                .size(8.dp)
+                .background(MaterialTheme.colorScheme.secondary, CircleShape),
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+            Text(
+                detail,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -442,6 +582,46 @@ private fun IosSegmentedControl(
 }
 
 @Composable
+private fun InfoStrip(title: String, detail: String) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        shape = RoundedCornerShape(12.dp),
+    ) {
+        Row(
+            Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(title, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+            Text(
+                detail,
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsValueRow(label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.Top,
+    ) {
+        Text(
+            label,
+            modifier = Modifier.width(64.dp),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+    }
+}
+
+@Composable
 private fun LogsScreen(
     modifier: Modifier,
     logs: List<QueryLogEntry>,
@@ -471,12 +651,13 @@ private fun LogsScreen(
         }
     }
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        ScreenHeader("日志", "离线解释最近的 DNS 查询")
+        ScreenHeader("日志", logs.size.toString() + " 条记录仅保存在内存")
         OutlinedTextField(
             value = search,
             onValueChange = { search = it.take(253) },
-            label = { Text("搜索 APP、平台、用途或域名") },
+            label = { Text("搜索应用、用途或域名") },
             singleLine = true,
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(10.dp))
@@ -485,12 +666,12 @@ private fun LogsScreen(
             selected = filter,
             onSelected = { filter = it },
         )
-        Text(
-            "最多 500 条，仅在内存中保存；来源 APP 为系统连接归属的尽力识别",
-            modifier = Modifier.padding(vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Spacer(Modifier.height(10.dp))
+        InfoStrip(
+            title = filtered.size.toString() + " 条结果",
+            detail = "最多 500 条 · 停止保护即清空",
         )
+        Spacer(Modifier.height(10.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -498,11 +679,17 @@ private fun LogsScreen(
             LazyColumn(Modifier.fillMaxSize()) {
                 if (filtered.isEmpty()) {
                     item {
-                        Text(
-                            "暂无匹配日志",
-                            modifier = Modifier.padding(20.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 28.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("暂无匹配日志", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "开启保护并产生 DNS 查询后，记录会显示在这里。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 items(filtered, key = { it.id }) { entry ->
@@ -510,31 +697,25 @@ private fun LogsScreen(
                         DomainInsightResolver.resolve(entry.domain, entry.blocked)
                     }
                     val whitelisted = whitelistMatcher.isWhitelisted(entry.domain)
+                    val sourceName = entry.sourceApp?.let { source ->
+                        "来源 " + source.label + if (source.sharedUid) "（共享 UID）" else ""
+                    } ?: insight.provider
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .clickable { selectedEntry = entry }
-                            .padding(horizontal = 16.dp, vertical = 11.dp),
+                            .padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
                                 insight.displayName,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.SemiBold,
                             )
-                            entry.sourceApp?.let { source ->
-                                Text(
-                                    "来源：${source.label}${if (source.sharedUid) "（共享 UID）" else ""}",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
                             Text(
-                                "${insight.provider} · ${insight.category}",
+                                sourceName + " · " + insight.category,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -548,13 +729,15 @@ private fun LogsScreen(
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                "${if (entry.blocked) "已拦截" else "已放行"} · ${formatTime(entry.timestampEpochMillis)}",
+                                (if (entry.blocked) "已拦截" else "已放行") +
+                                    " · " + formatTime(entry.timestampEpochMillis),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = if (entry.blocked) {
                                     MaterialTheme.colorScheme.error
                                 } else {
                                     MaterialTheme.colorScheme.secondary
                                 },
+                                fontWeight = FontWeight.Medium,
                             )
                         }
                         if (entry.blocked) {
@@ -564,7 +747,7 @@ private fun LogsScreen(
                             ) { Text(if (whitelisted) "已放行" else "放行") }
                         }
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                 }
             }
         }
@@ -695,12 +878,13 @@ private fun AppsScreen(
         }
     }
     Column(modifier.fillMaxSize().padding(horizontal = 20.dp)) {
-        ScreenHeader("应用", "选择不经过净网拦截的应用")
+        ScreenHeader("应用", bypassPackages.size.toString() + " 个应用已绕过拦截")
         OutlinedTextField(
             value = search,
             onValueChange = { search = it.take(100) },
-            label = { Text("搜索应用") },
+            label = { Text("搜索名称或包名") },
             singleLine = true,
+            shape = RoundedCornerShape(14.dp),
             modifier = Modifier.fillMaxWidth(),
         )
         Spacer(Modifier.height(10.dp))
@@ -709,12 +893,12 @@ private fun AppsScreen(
             selected = appFilter,
             onSelected = { appFilter = it },
         )
-        Text(
-            "完整列表只保留在内存；仅加密保存已选择的包名${if (vpnActive) "，修改会重建 VPN" else ""}",
-            modifier = Modifier.padding(vertical = 10.dp),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        Spacer(Modifier.height(10.dp))
+        InfoStrip(
+            title = visible.size.toString() + " 个结果",
+            detail = if (vpnActive) "更改后自动重建保护" else "完整应用列表仅在内存",
         )
+        Spacer(Modifier.height(10.dp))
         Card(
             modifier = Modifier.fillMaxWidth().weight(1f),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -722,32 +906,50 @@ private fun AppsScreen(
             LazyColumn(Modifier.fillMaxSize()) {
                 if (visible.isEmpty()) {
                     item {
-                        Text(
-                            "没有匹配的应用",
-                            modifier = Modifier.padding(20.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        Column(
+                            Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 28.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text("没有匹配的应用", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                "可切换筛选范围或尝试搜索包名。",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                     }
                 }
                 items(visible, key = InstalledApp::packageName) { app ->
                     val isSelf = app.packageName == context.packageName
                     Row(
-                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Column(Modifier.weight(1f)) {
-                            Text(app.label, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                             Text(
-                                buildString {
-                                    append(app.packageName)
-                                    if (app.system) append(" · 系统")
-                                    if (!app.hasLauncher) append(" · 无桌面图标")
-                                },
+                                app.label,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                            Text(
+                                app.packageName,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )
+                            if (app.system || !app.hasLauncher) {
+                                Text(
+                                    buildString {
+                                        if (app.system) append("系统应用")
+                                        if (app.system && !app.hasLauncher) append(" · ")
+                                        if (!app.hasLauncher) append("无桌面图标")
+                                    },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            }
                         }
                         Switch(
                             checked = app.packageName in effectiveBypass,
@@ -755,7 +957,7 @@ private fun AppsScreen(
                             onCheckedChange = { onBypassChanged(app.packageName, it) },
                         )
                     }
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
                 }
             }
         }
@@ -784,28 +986,16 @@ private fun SettingsScreen(
         modifier.fillMaxSize().padding(horizontal = 20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        item { ScreenHeader("设置", "外观、规则和隐私控制") }
-        item { SectionTitle("外观") }
+        item { ScreenHeader("设置", "安全、规则与本地数据") }
         item {
-            Card(
-                Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Row(
-                    Modifier.fillMaxWidth().padding(16.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                        Text("深色模式", fontWeight = FontWeight.SemiBold)
-                        Text(
-                            "关闭时使用浅色界面",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                    Switch(checked = darkMode, onCheckedChange = onDarkModeChanged)
-                }
-            }
+            TrustCard(
+                title = "安全状态",
+                items = listOf(
+                    "DNS 日志" to "仅保存在内存，停止保护后清空",
+                    "规则更新" to "仅在你主动点击时访问固定 HTTPS 地址",
+                    "系统备份" to "云备份和设备迁移备份均已关闭",
+                ),
+            )
         }
         item { SectionTitle("规则与更新") }
         if (ruleState.error != null) item { WarningCard(ruleState.error) }
@@ -815,14 +1005,13 @@ private fun SettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("规则状态", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                    Text("来源：${ruleState.metadata.source}")
-                    Text("版本：${ruleState.metadata.version}")
-                    Text("条目：${ruleState.metadata.entryCount}")
-                    Text(
-                        "SHA-256：${ruleState.metadata.sha256.ifEmpty { "尚未加载" }}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    Text("当前规则", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    SettingsValueRow("来源", ruleState.metadata.source)
+                    SettingsValueRow("版本", ruleState.metadata.version)
+                    SettingsValueRow("条目", ruleState.metadata.entryCount.toString())
+                    SettingsValueRow(
+                        "SHA-256",
+                        ruleState.metadata.sha256.ifEmpty { "尚未加载" },
                     )
                     HorizontalDivider(
                         modifier = Modifier.padding(vertical = 4.dp),
@@ -868,7 +1057,7 @@ private fun SettingsScreen(
                 }
             }
         }
-        item { SectionTitle("白名单") }
+        item { SectionTitle("始终放行") }
         item {
             Card(
                 Modifier.fillMaxWidth(),
@@ -876,6 +1065,11 @@ private fun SettingsScreen(
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("白名单优先", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "加入后，该域名及其子域名不会被拦截。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                     OutlinedTextField(
                         value = domain,
                         onValueChange = { domain = it.take(253) },
@@ -913,21 +1107,28 @@ private fun SettingsScreen(
                 }
             }
         }
-        item { SectionTitle("隐私与日志") }
+        item { SectionTitle("本地数据") }
         item {
             Card(
                 Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
-                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Text("内存日志", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "净网不读取网页正文，不上传 DNS 日志，不含账号、广告、统计、联网崩溃上报、远程配置或动态代码。系统 DNS 仍可看到正常查询；手动更新时 anti-AD 服务器可看到连接 IP 与时间。",
-                        style = MaterialTheme.typography.bodyMedium,
+                        "最多保留 500 条 DNS 记录和尽力识别的来源应用信息，不写入磁盘，也不会上传。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     OutlinedButton(
                         onClick = { container.queryLogRepository.clear() },
                         modifier = Modifier.fillMaxWidth(),
                     ) { Text("立即清空内存日志") }
+                    Text(
+                        "被放行的正常查询仍由当前网络提供的系统 DNS 处理。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
                 }
             }
         }
@@ -976,6 +1177,28 @@ private fun SettingsScreen(
                     crashReportMessage?.let { message ->
                         Text(message, style = MaterialTheme.typography.bodySmall)
                     }
+                }
+            }
+        }
+        item { SectionTitle("外观") }
+        item {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Row(
+                    Modifier.fillMaxWidth().padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                        Text("深色模式", fontWeight = FontWeight.SemiBold)
+                        Text(
+                            "关闭时使用浅色界面",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Switch(checked = darkMode, onCheckedChange = onDarkModeChanged)
                 }
             }
         }

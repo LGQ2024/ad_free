@@ -1,0 +1,14 @@
+.gradle/
+.idea/
+.kotlin/
+build/
+**/build/
+app/release/
+gradle/gradle-daemon-jvm.properties
+local.properties
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.apk
+*.aab

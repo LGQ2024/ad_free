@@ -3,12 +3,15 @@ package com.example.jingwang.core.rules
 class RuleMatcher(
     blockedDomains: Set<String>,
     whitelist: Set<String>,
+    customBlockedDomains: Set<String> = emptySet(),
 ) {
     private val blocked = blockedDomains
     private val allowed = whitelist.mapNotNull(DomainNames::normalize).toHashSet()
+    private val customBlocked = customBlockedDomains.mapNotNull(DomainNames::normalize).toHashSet()
 
     fun shouldBlock(domain: String): Boolean {
         val normalized = DomainNames.normalize(domain) ?: return false
+        if (matchesSuffix(normalized, customBlocked)) return true
         if (matchesSuffix(normalized, allowed)) return false
         return matchesSuffix(normalized, blocked)
     }
@@ -16,6 +19,11 @@ class RuleMatcher(
     fun isWhitelisted(domain: String): Boolean {
         val normalized = DomainNames.normalize(domain) ?: return false
         return matchesSuffix(normalized, allowed)
+    }
+
+    fun isCustomBlocked(domain: String): Boolean {
+        val normalized = DomainNames.normalize(domain) ?: return false
+        return matchesSuffix(normalized, customBlocked)
     }
 
     private fun matchesSuffix(domain: String, candidates: Set<String>): Boolean {

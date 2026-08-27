@@ -22,11 +22,33 @@ class PrivacyRepository(private val store: SecureSettingsStore) {
 
     fun addWhitelist(value: String): Boolean {
         val domain = DomainNames.normalize(value) ?: return false
-        mutateAndPersist { it.copy(whitelist = it.whitelist + domain) }
+        mutateAndPersist {
+            it.copy(
+                whitelist = it.whitelist + domain,
+                customBlockedDomains = it.customBlockedDomains.filterNot { blocked ->
+                    domain == blocked || domain.endsWith(".$blocked")
+                }.toSet(),
+            )
+        }
         return true
     }
 
     fun removeWhitelist(domain: String) = mutateAndPersist { it.copy(whitelist = it.whitelist - domain) }
+
+    fun addCustomBlock(value: String): Boolean {
+        val domain = DomainNames.normalize(value) ?: return false
+        mutateAndPersist {
+            it.copy(
+                whitelist = it.whitelist - domain,
+                customBlockedDomains = it.customBlockedDomains + domain,
+            )
+        }
+        return true
+    }
+
+    fun removeCustomBlock(domain: String) = mutateAndPersist {
+        it.copy(customBlockedDomains = it.customBlockedDomains - domain)
+    }
 
     fun setPackageBypassed(packageName: String, bypassed: Boolean) {
         if (packageName.length !in 1..255) return

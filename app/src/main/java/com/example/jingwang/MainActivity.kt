@@ -212,8 +212,12 @@ private fun JingwangApp(
                     modifier = Modifier.padding(padding),
                     logs = logs,
                     whitelist = settings.whitelist,
+                    customBlockedDomains = settings.customBlockedDomains,
                     onWhitelist = { domain ->
                         container.applicationScope.launch { container.privacyRepository.addWhitelist(domain) }
+                    },
+                    onBlock = { domain ->
+                        container.applicationScope.launch { container.privacyRepository.addCustomBlock(domain) }
                     },
                 )
                 Screen.APPS -> AppsScreen(
@@ -234,6 +238,7 @@ private fun JingwangApp(
                     modifier = Modifier.padding(padding),
                     container = container,
                     whitelist = settings.whitelist,
+                    customBlockedDomains = settings.customBlockedDomains,
                     ruleState = ruleState,
                     crashReport = crashReport,
                     darkMode = settings.darkMode,
@@ -626,12 +631,16 @@ private fun LogsScreen(
     modifier: Modifier,
     logs: List<QueryLogEntry>,
     whitelist: Set<String>,
+    customBlockedDomains: Set<String>,
     onWhitelist: (String) -> Unit,
+    onBlock: (String) -> Unit,
 ) {
     var search by rememberSaveable { mutableStateOf("") }
     var filter by rememberSaveable { mutableIntStateOf(0) }
     var selectedEntry by remember { mutableStateOf<QueryLogEntry?>(null) }
-    val whitelistMatcher = remember(whitelist) { RuleMatcher(emptySet(), whitelist) }
+    val manualRuleMatcher = remember(whitelist, customBlockedDomains) {
+        RuleMatcher(emptySet(), whitelist, customBlockedDomains)
+    }
     val filtered = remember(logs, search, filter) {
         val term = search.trim()
         logs.filter { entry ->
@@ -696,7 +705,8 @@ private fun LogsScreen(
                     val insight = remember(entry.domain, entry.blocked) {
                         DomainInsightResolver.resolve(entry.domain, entry.blocked)
                     }
-                    val whitelisted = whitelistMatcher.isWhitelisted(entry.domain)
+                    val customBlocked = manualRuleMatcher.isCustomBlocked(entry.domain)
+                    val whitelisted = manualRuleMatcher.isWhitelisted(entry.domain) && !customBlocked
                     val sourceName = entry.sourceApp?.let { source ->
                         "来源 " + source.label + if (source.sharedUid) "（共享 UID）" else ""
                     } ?: insight.provider
@@ -745,6 +755,11 @@ private fun LogsScreen(
                                 onClick = { onWhitelist(entry.domain) },
                                 enabled = !whitelisted,
                             ) { Text(if (whitelisted) "已放行" else "放行") }
+                        } else {
+                            TextButton(
+                                onClick = { onBlock(entry.domain) },
+                                enabled = !customBlocked,
+                            ) { Text(if (customBlocked) "已设置" else "拦截") }
                         }
                     }
                     HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.45f))
@@ -970,6 +985,7 @@ private fun SettingsScreen(
     modifier: Modifier,
     container: AppContainer,
     whitelist: Set<String>,
+    customBlockedDomains: Set<String>,
     ruleState: RuleState,
     crashReport: String?,
     darkMode: Boolean,
@@ -1057,6 +1073,40 @@ private fun SettingsScreen(
                 }
             }
         }
+        item { SectionTitle("始终拦截") }
+        item {
+            Card(
+                Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("自定义拦截", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        "在日志页点击“拦截”后，该域名及其子域名会优先被拦截。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    if (customBlockedDomains.isEmpty()) {
+                        Text(
+                            "尚未设置自定义拦截",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    customBlockedDomains.sorted().forEach { item ->
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Text(item, Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            TextButton(onClick = {
+                                container.applicationScope.launch {
+                                    container.privacyRepository.removeCustomBlock(item)
+                                }
+                            }) { Text("移除") }
+                        }
+                    }
+                }
+            }
+        }
         item { SectionTitle("始终放行") }
         item {
             Card(
@@ -1064,9 +1114,9 @@ private fun SettingsScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("白名单优先", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text("白名单规则", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
-                        "加入后，该域名及其子域名不会被拦截。",
+                        "加入后，该域名及其子域名不会被公共规则拦截；自定义拦截仍然优先。",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

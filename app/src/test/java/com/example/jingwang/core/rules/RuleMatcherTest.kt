@@ -24,6 +24,20 @@ class RuleMatcherTest {
     }
 
     @Test
+    fun customBlockWinsOverWhitelistAndCoversSubdomains() {
+        val matcher = RuleMatcher(
+            blockedDomains = emptySet(),
+            whitelist = setOf("example.com"),
+            customBlockedDomains = setOf("ads.example.com"),
+        )
+
+        assertTrue(matcher.shouldBlock("ads.example.com"))
+        assertTrue(matcher.shouldBlock("deep.ads.example.com"))
+        assertFalse(matcher.shouldBlock("content.example.com"))
+        assertTrue(matcher.isCustomBlocked("deep.ads.example.com"))
+    }
+
+    @Test
     fun parserExtractsVersionAndNormalizes() {
         val text = "#VER=202608240001\nExample.COM\naddress=/ads.test/\ninvalid line here\n"
         val parsed = RuleListParser.parse(ByteArrayInputStream(text.encodeToByteArray()))

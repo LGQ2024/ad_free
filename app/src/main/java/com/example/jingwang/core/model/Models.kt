@@ -18,6 +18,7 @@ data class TrafficStatistics(
 
 data class PersistedSettings(
     val whitelist: Set<String> = emptySet(),
+    val customBlockedDomains: Set<String> = emptySet(),
     val bypassPackages: Set<String> = emptySet(),
     val ruleMetadata: RuleMetadata = RuleMetadata(),
     val statistics: TrafficStatistics = TrafficStatistics(),

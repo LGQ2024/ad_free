@@ -13,6 +13,7 @@ class RepositoryUnitTest {
     fun versionedCodecRoundTripsWithoutPlainJson() {
         val settings = PersistedSettings(
             whitelist = setOf("example.com"),
+            customBlockedDomains = setOf("ads.example.com"),
             bypassPackages = setOf("com.example.app"),
             ruleMetadata = RuleMetadata("test", "1", 123, 10, "a".repeat(64)),
             statistics = TrafficStatistics(1, 2, 3, 4, 5),
@@ -24,9 +25,10 @@ class RepositoryUnitTest {
     @Test
     fun codecReadsLegacyStateWithoutThemeFlagAsLightMode() {
         val encoded = SecureSettingsStore.encode(PersistedSettings(darkMode = true))
-        val legacyBytes = encoded.copyOf(encoded.size - 1)
+        val legacyBytes = encoded.copyOf(encoded.size - 5)
 
         assertEquals(false, SecureSettingsStore.decode(legacyBytes).darkMode)
+        assertTrue(SecureSettingsStore.decode(legacyBytes).customBlockedDomains.isEmpty())
     }
 
     @Test

@@ -53,7 +53,8 @@ class RuleRepository(
         }
     }
 
-    fun matcher(whitelist: Set<String>): RuleMatcher = RuleMatcher(blockedDomains, whitelist)
+    fun matcher(whitelist: Set<String>, customBlockedDomains: Set<String>): RuleMatcher =
+        RuleMatcher(blockedDomains, whitelist, customBlockedDomains)
 
     suspend fun updateManually(): Result<RuleMetadata> = withContext(Dispatchers.IO) {
         runCatching {

@@ -120,6 +120,7 @@ class SecureSettingsStore(context: Context) {
                     output.writeLong(allowedTotal)
                 }
                 output.writeBoolean(settings.darkMode)
+                output.writeStringSet(settings.customBlockedDomains)
             }
             bytes.toByteArray()
         }
@@ -143,9 +144,11 @@ class SecureSettingsStore(context: Context) {
                 allowedTotal = input.readLong().coerceAtLeast(0),
             )
             val darkMode = if (input.available() > 0) input.readBoolean() else false
+            val customBlockedDomains = if (input.available() > 0) input.readStringSet() else emptySet()
             require(input.read() == -1) { "状态数据包含尾随内容" }
             PersistedSettings(
                 whitelist = whitelist,
+                customBlockedDomains = customBlockedDomains,
                 bypassPackages = bypass,
                 ruleMetadata = metadata,
                 statistics = statistics,

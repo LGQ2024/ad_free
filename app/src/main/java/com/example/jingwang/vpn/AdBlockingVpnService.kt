@@ -56,7 +56,7 @@ class AdBlockingVpnService : VpnService() {
         forwarder = SystemDnsForwarder(this) { systemDnsNetwork.current.value }
         serviceScope.launch {
             combine(container.privacyRepository.settings, container.ruleRepository.state) { settings, _ ->
-                container.ruleRepository.matcher(settings.whitelist)
+                container.ruleRepository.matcher(settings.whitelist, settings.customBlockedDomains)
             }.collect { matcher = it }
         }
         serviceScope.launch {
